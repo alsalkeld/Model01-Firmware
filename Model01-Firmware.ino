@@ -45,9 +45,6 @@
 // Support for an LED mode that makes all the LEDs 'breathe'
 #include "Kaleidoscope-LEDEffect-Breathe.h"
 
-// Support for an LED mode that makes a red pixel chase a blue pixel across the keyboard
-#include "Kaleidoscope-LEDEffect-Chase.h"
-
 // Support for LED modes that pulse the keyboard's LED in a rainbow pattern
 #include "Kaleidoscope-LEDEffect-Rainbow.h"
 
@@ -69,7 +66,7 @@
 // Support for Space Cadet, allowing you to use shift as parenthesis
 #include "Kaleidoscope-SpaceCadet.h"
 
-#include "Kaleidoscope-LED-Wavepool.h"
+//#include "Kaleidoscope-LED-Wavepool.h"
 
 /** This 'enum' is a list of all the macros used by the Model 01's firmware
   * The names aren't particularly important. What is important is that each
@@ -448,10 +445,6 @@ KALEIDOSCOPE_INIT_PLUGINS(
   // running through all the colors of the rainbow.
   LEDRainbowEffect,
 
-  // The chase effect follows the adventure of a blue pixel which chases a red pixel across
-  // your keyboard. Spoiler: the blue pixel never catches the red pixel
-  LEDChaseEffect,
-
   // The breathe effect slowly pulses all of the LEDs on your keyboard
   LEDBreatheEffect,
 
@@ -459,7 +452,7 @@ KALEIDOSCOPE_INIT_PLUGINS(
   StalkerEffect,
 
   // The wavepool effect lights up keys with ripples of rain
-  WavepoolEffect,
+  //WavepoolEffect,
 
   // We start with the LED effect that turns off all the LEDs.
   LEDOff,
@@ -539,8 +532,7 @@ void setup() {
   SpaceCadet.map = spacecadetmap;
 
   // Wavepool effect settings
-  WavepoolEffect.idle_timeout = 5000;  // 5 seconds
-  WavepoolEffect.activate();
+  //WavepoolEffect.idle_timeout = 5000;  // 5 seconds
 }
 
 /** loop is the second of the standard Arduino sketch functions.
