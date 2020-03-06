@@ -51,8 +51,14 @@
 // Support for an LED mode that lights up the keys as you press them
 #include "Kaleidoscope-LED-Stalker.h"
 
+// Support for shared palettes for other plugins, like Colormap below
+#include "Kaleidoscope-LED-Palette-Theme.h"
+
+// Support for an LED mode that lets one configure per-layer color maps
+#include "Kaleidoscope-Colormap.h"
+
 // Support for Keyboardio's internal keyboard testing mode
-#include "Kaleidoscope-Model01-TestMode.h"
+#include "Kaleidoscope-HardwareTestMode.h"
 
 // Support for host power management (suspend & wakeup)
 #include "Kaleidoscope-HostPowerManagement.h"
@@ -99,10 +105,10 @@ enum { MACRO_VERSION_INFO,
   * defined as part of the USB HID Keyboard specification. You can find the names
   * (if not yet the explanations) for all the standard `Key_` defintions offered by
   * Kaleidoscope in these files:
-  *    https://github.com/keyboardio/Kaleidoscope/blob/master/src/key_defs_keyboard.h
-  *    https://github.com/keyboardio/Kaleidoscope/blob/master/src/key_defs_consumerctl.h
-  *    https://github.com/keyboardio/Kaleidoscope/blob/master/src/key_defs_sysctl.h
-  *    https://github.com/keyboardio/Kaleidoscope/blob/master/src/key_defs_keymaps.h
+  *    https://github.com/keyboardio/Kaleidoscope/blob/master/src/kaleidoscope/key_defs_keyboard.h
+  *    https://github.com/keyboardio/Kaleidoscope/blob/master/src/kaleidoscope/key_defs_consumerctl.h
+  *    https://github.com/keyboardio/Kaleidoscope/blob/master/src/kaleidoscope/key_defs_sysctl.h
+  *    https://github.com/keyboardio/Kaleidoscope/blob/master/src/kaleidoscope/key_defs_keymaps.h
   *
   * Additional things that should be documented here include
   *   using ___ to let keypresses fall through to the previously active layer
@@ -249,10 +255,10 @@ KEYMAPS(
    ___, ___, ___, ___,
    ___,
 
-   Key_F5,                 ___, Key_Keypad7, Key_Keypad8,   Key_Keypad9,        Key_KeypadSubtract, ___,
-   Key_F11,                ___, Key_Keypad4, Key_Keypad5,   Key_Keypad6,        Key_KeypadAdd,      ___,
-                           ___, Key_Keypad1, Key_Keypad2,   Key_Keypad3,        Key_Equals,         Key_Quote,
-   Key_F10,                ___, Key_Keypad0, Key_KeypadDot, Key_KeypadMultiply, Key_KeypadDivide,   Key_Enter,
+   Key_F5,  ___, Key_7, Key_8,      Key_9,              Key_KeypadSubtract, ___,
+   Key_F11,                    ___, Key_4, Key_5,      Key_6,              Key_KeypadAdd,      ___,
+                           ___, Key_1, Key_2,      Key_3,              Key_Equals,         ___,
+   Key_F10,                    ___, Key_0, Key_Period, Key_KeypadMultiply, Key_KeypadDivide,   Key_Enter,
    ___, ___, ___, ___,
    ___),
 
@@ -288,6 +294,25 @@ static void versionInfoMacro(uint8_t keyState) {
   }
 }
 
+/** anyKeyMacro is used to provide the functionality of the 'Any' key.
+ *
+ * When the 'any key' macro is toggled on, a random alphanumeric key is
+ * selected. While the key is held, the function generates a synthetic
+ * keypress event repeating that randomly selected key.
+ *
+ */
+
+static void anyKeyMacro(uint8_t keyState) {
+  static Key lastKey;
+  bool toggledOn = false;
+  if (keyToggledOn(keyState)) {
+    lastKey.setKeyCode(Key_A.getKeyCode() + (uint8_t)(millis() % 36));
+    toggledOn = true;
+  }
+
+  if (keyIsPressed(keyState))
+    Kaleidoscope.hid().keyboard().pressKey(lastKey, toggledOn);
+}
 
 /** macroAction dispatches keymap events that are tied to a macro
     to that macro. It takes two uint8_t parameters.
@@ -316,36 +341,18 @@ const macro_t *macroAction(uint8_t macroIndex, uint8_t keyState) {
   return MACRO_NONE;
 }
 
-
-
-// These 'solid' color effect definitions define a rainbow of
-// LED color modes calibrated to draw 500mA or less on the
-// Keyboardio Model 01.
-
-
-//static kaleidoscope::LEDSolidColor solidRed(160, 0, 0);
-//static kaleidoscope::LEDSolidColor solidOrange(140, 70, 0);
-//static kaleidoscope::LEDSolidColor solidYellow(130, 100, 0);
-//static kaleidoscope::LEDSolidColor solidGreen(0, 160, 0);
-//static kaleidoscope::LEDSolidColor solidBlue(0, 70, 130);
-//static kaleidoscope::LEDSolidColor solidIndigo(0, 0, 170);
-//static kaleidoscope::LEDSolidColor solidViolet(130, 0, 120);
-
 /** toggleLedsOnSuspendResume toggles the LEDs off when the host goes to sleep,
  * and turns them back on when it wakes up.
  */
-void toggleLedsOnSuspendResume(kaleidoscope::HostPowerManagement::Event event) {
+void toggleLedsOnSuspendResume(kaleidoscope::plugin::HostPowerManagement::Event event) {
   switch (event) {
-  case kaleidoscope::HostPowerManagement::Suspend:
-    LEDControl.paused = true;
-    LEDControl.set_all_leds_to({0, 0, 0});
-    LEDControl.syncLeds();
+  case kaleidoscope::plugin::HostPowerManagement::Suspend:
+    LEDControl.disable();
     break;
-  case kaleidoscope::HostPowerManagement::Resume:
-    LEDControl.paused = false;
-    LEDControl.refreshAll();
+  case kaleidoscope::plugin::HostPowerManagement::Resume:
+    LEDControl.enable();
     break;
-  case kaleidoscope::HostPowerManagement::Sleep:
+  case kaleidoscope::plugin::HostPowerManagement::Sleep:
     break;
   }
 }
@@ -354,7 +361,7 @@ void toggleLedsOnSuspendResume(kaleidoscope::HostPowerManagement::Event event) {
  * resume, and sleep) to other functions that perform action based on these
  * events.
  */
-void hostPowerManagementEventHandler(kaleidoscope::HostPowerManagement::Event event) {
+void hostPowerManagementEventHandler(kaleidoscope::plugin::HostPowerManagement::Event event) {
   toggleLedsOnSuspendResume(event);
 }
 
@@ -368,10 +375,14 @@ void hostPowerManagementEventHandler(kaleidoscope::HostPowerManagement::Event ev
 enum {
   // Toggle between Boot (6-key rollover; for BIOSes and early boot) and NKRO
   // mode.
-  COMBO_TOGGLE_NKRO_MODE
+  COMBO_TOGGLE_NKRO_MODE,
+  // Enter test mode
+  COMBO_ENTER_TEST_MODE
 };
 
-/** A tiny wrapper, to be used by MagicCombo.
+/** Wrappers, to be used by MagicCombo. **/
+
+/**
  * This simply toggles the keyboard protocol via USBQuirks, and wraps it within
  * a function with an unused argument, to match what MagicCombo expects.
  */
@@ -379,13 +390,25 @@ static void toggleKeyboardProtocol(uint8_t combo_index) {
   USBQuirks.toggleKeyboardProtocol();
 }
 
+/**
+ *  This enters the hardware test mode
+ */
+static void enterHardwareTestMode(uint8_t combo_index) {
+  HardwareTestMode.runTests();
+}
+
+
 /** Magic combo list, a list of key combo and action pairs the firmware should
  * recognise.
  */
 USE_MAGIC_COMBOS({.action = toggleKeyboardProtocol,
                   // Left Fn + Esc + Shift
                   .keys = { R3C6, R2C6, R3C7 }
-                 });
+}, {
+  .action = enterHardwareTestMode,
+  // Left Fn + Prog + LED
+  .keys = { R3C6, R0C0, R0C6 }
+});
 
 // First, tell Kaleidoscope which plugins you want to use.
 // The order can be important. For example, LED effects are
@@ -415,7 +438,7 @@ KALEIDOSCOPE_INIT_PLUGINS(
 
   // The hardware test mode, which can be invoked by tapping Prog, LED and the
   // left Fn button at the same time.
-  TestMode,
+  HardwareTestMode,
 
   // LEDControl provides support for other LED modes
   LEDControl,
@@ -434,6 +457,13 @@ KALEIDOSCOPE_INIT_PLUGINS(
   // The stalker effect lights up the keys you've pressed recently
   StalkerEffect,
 
+  // The LED Palette Theme plugin provides a shared palette for other plugins,
+  // like Colormap below
+  LEDPaletteTheme,
+
+  // The Colormap effect makes it possible to set up per-layer colormaps
+  ColormapEffect,
+  
   // The wavepool effect lights up keys with ripples of rain
   //WavepoolEffect,
 
@@ -485,16 +515,25 @@ void setup() {
   LEDRainbowEffect.brightness(150);
   LEDRainbowWaveEffect.brightness(150);
 
+  // Set the action key the test mode should listen for to Left Fn
+  HardwareTestMode.setActionKey(R3C6);
+
   // The LED Stalker mode has a few effects. The one we like is called
   // 'BlazingTrail'. For details on other options, see
-  // https://github.com/keyboardio/Kaleidoscope/blob/master/doc/plugin/LED-Stalker.md
+  // https://github.com/keyboardio/Kaleidoscope/blob/master/docs/plugins/LED-Stalker.md
   StalkerEffect.variant = STALKER(BlazingTrail);
 
   // To make the keymap editable without flashing new firmware, we store
   // additional layers in EEPROM. For now, we reserve space for five layers. If
   // one wants to use these layers, just set the default layer to one in EEPROM,
-  // by using the `settings.defaultLayer` Focus command.
-  EEPROMKeymap.setup(5, EEPROMKeymap.Mode::EXTEND);
+  // by using the `settings.defaultLayer` Focus command, or by using the
+  // `keymap.onlyCustom` command to use EEPROM layers only.
+  EEPROMKeymap.setup(5);
+
+  // We need to tell the Colormap plugin how many layers we want to have custom
+  // maps for. To make things simple, we set it to five layers, which is how
+  // many editable layers we have (see above).
+  ColormapEffect.max_layers(5);
   
   //Space Cadet Settings
   //Set the keymap with a 250ms timeout per-key
